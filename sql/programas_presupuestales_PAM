@@ -1,0 +1,2 @@
+/* Selección de programas exclusivos PAM */
+SELECT* FROM ppto_2025 WHERE	ppto_2025.PROGRAMA_PPTO = "0142" or ppto_2025.PROGRAMA_PPTO="0097";
