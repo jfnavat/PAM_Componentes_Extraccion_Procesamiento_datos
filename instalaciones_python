@@ -1,0 +1,5 @@
+pip install pymysql
+pip install xlsxwriter --user
+!pip install ollama --user
+!pip install google-genai --user
+# reiniciar kernel
