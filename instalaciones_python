@@ -2,4 +2,5 @@ pip install pymysql
 pip install xlsxwriter --user
 !pip install ollama --user
 !pip install google-genai --user
+pip install llama-cpp-python
 # reiniciar kernel
