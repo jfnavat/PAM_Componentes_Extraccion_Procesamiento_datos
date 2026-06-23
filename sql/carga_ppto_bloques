@@ -1,0 +1,45 @@
+import re
+import pandas as pd
+
+from sqlalchemy import create_engine, text
+
+credenciales = "mysql+pymysql://root:XXXXXXX@localhost:3308/mef"
+engine = create_engine(credenciales)
+
+# Definición de variables presupuestales para analizar
+columnas = """
+    PROGRAMA_PPTO_NOMBRE, PRODUCTO_PROYECTO_NOMBRE, ACTIVIDAD_ACCION_OBRA_NOMBRE,
+    FUNCION_NOMBRE, DIVISION_FUNCIONAL_NOMBRE, GRUPO_FUNCIONAL_NOMBRE, META_NOMBRE, CATEGORIA_GASTO_NOMBRE, SUBGENERICA_DET_NOMBRE
+"""
+tamano_bloque = 100000
+offset = 0
+df_final = pd.DataFrame()
+
+print("Iniciando extracción por paginación...")
+
+while True:
+    # Consulta limitando los registros por bloque
+    query_paginada = f"SELECT {columnas} FROM ppto_2025 WHERE USADO = 0 LIMIT {tamano_bloque} OFFSET {offset};"
+    
+    # Descarga directa del bloque
+    bloque = pd.read_sql(query_paginada, con=engine)
+    
+    # Si el bloque está vacío, fin
+    if bloque.empty:
+        break
+        
+    print(f"-> Registros leidos exitosamente: {offset + len(bloque):,}")
+    
+    # Une el bloque al DataFrame final
+    df_final = pd.concat([df_final, bloque], ignore_index=True)
+    
+    # Siguiente bloque de 100,000
+    offset += tamano_bloque
+    
+    break
+
+print(f"Carga masiva completada. Matriz final con {len(df_final):,} registros.")
+
+# Elimina caracteres inservibles
+ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+df_final = df_final.applymap(lambda x: ILLEGAL_CHARACTERS_RE.sub(r'', x) if isinstance(x, str) else x)
