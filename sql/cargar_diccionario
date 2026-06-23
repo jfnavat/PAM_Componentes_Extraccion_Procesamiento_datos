@@ -1,0 +1,4 @@
+# Cargar del diccionario PAM
+
+query_diccionario = "SELECT tipo_coincidencia, raiz_lexema FROM diccionario_pam;"
+df_diccionario = pd.read_sql(query_diccionario, con=engine)
