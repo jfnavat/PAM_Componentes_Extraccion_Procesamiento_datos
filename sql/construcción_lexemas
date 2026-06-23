@@ -1,0 +1,91 @@
+import pandas as pd
+import re
+
+# Cargar del diccionario PAM
+query_diccionario = "SELECT tipo_coincidencia, raiz_lexema FROM diccionario_pam;"
+df_diccionario = pd.read_sql(query_diccionario, con=engine)
+
+# Extraer de las listas originales desde el DataFrame del diccionario
+lista_absolutos = (
+    df_diccionario[df_diccionario["tipo_coincidencia"] == "ABSOLUTO"]["raiz_lexema"]
+    .str.lower()
+    .tolist()
+)
+
+lista_condicionales = (
+    df_diccionario[df_diccionario["tipo_coincidencia"] == "CONDICIONAL"]["raiz_lexema"]
+    .str.lower()
+    .tolist()
+)
+
+# === VARIABLES REQUERIDAS: Eliminacipon de duplicados manteniendo el orden original ===
+lista_absolutos_limpia = list(dict.fromkeys(lista_absolutos))
+lista_condicionales_limpia = list(dict.fromkeys(lista_condicionales))
+
+# PROCESAMIENTO Y ARMADO DESDE LAS VARIABLES LIMPIAS
+patrones_absolutos_dinamicos = []
+for t in lista_absolutos_limpia:
+    # eliminando nulos, espacios vacíos o comodines
+    if pd.isna(t) or str(t).strip() == "":
+        continue
+    t_limpio = str(t).replace('*', '').strip().lower()
+    
+    # Si la raíz tiene 4 letras o menos (ej: 'ani', 'san', 'can'),
+    # forzar a que sea PALABRA EXACTA para evitar falsos positivos
+    if len(t_limpio) <= 4:
+        patrones_absolutos_dinamicos.append(rf"\b{re.escape(t_limpio)}\b")
+    else:
+        # Para términos largos seguros (ej: 'pension', 'adult'), se permiten sufijos (\w*)
+        patrones_absolutos_dinamicos.append(rf"\b{re.escape(t_limpio)}\w*\b")
+
+# Filtrar la lista condicional para evitar celdas vacías accidentales
+patrones_condicionales_dinamicos = [
+    rf"\b{re.escape(str(t).replace('*', '').strip().lower())}\b"
+    for t in lista_condicionales_limpia if pd.notna(t) and str(t).strip() != ""
+]
+
+# Contrucciópn de expresiones regulares finales
+regex_absolutos = re.compile("|".join(patrones_absolutos_dinamicos), re.IGNORECASE)
+regex_condicionales = re.compile("|".join(patrones_condicionales_dinamicos), re.IGNORECASE)
+
+# Conversión de listas en DataFrames
+df_pestana_absolutos = pd.DataFrame({"Raíces Absolutas": lista_absolutos_limpia})
+df_pestana_condicionales = pd.DataFrame({"Raíces Condicionales": lista_condicionales_limpia})
+
+print("Patrones armados con éxito.")
+print(f"Total Absolutos procesados: {len(lista_absolutos_limpia)}")
+print(f"Total Condicionales procesados: {len(lista_condicionales_limpia)}")
+
+# Eliminación de duplicados manteniendo el orden original
+lista_absolutos_limpia = list(dict.fromkeys(lista_absolutos))
+lista_condicionales_limpia = list(dict.fromkeys(lista_condicionales))
+
+# Filtrado de seguridad contra cadenas vacías o nulas
+lista_absolutos_filtrada = [
+    str(t).strip().lower() for t in lista_absolutos_limpia 
+    if pd.notna(t) and str(t).strip() != "" and len(str(t).strip()) > 1
+]
+
+# Construcción con anclajes estrictos en ambos lados de la raíz
+patrones_absolutos_dinamicos = []
+for t in lista_absolutos_filtrada:
+    t_limpio = t.replace('*', '').strip()
+    
+    # Verificación para que se inicie exactamente ahí (\b) y termine ahí (\b) o permita sufijos válidos (\w*)
+    # pero asegurando que no haya letras pegadas antes de la palabra (como 'dis' en dispension)
+    patrones_absolutos_dinamicos.append(rf"\b{re.escape(t_limpio)}\w*\b")
+
+regex_absolutos = re.compile("|".join(patrones_absolutos_dinamicos), re.IGNORECASE)
+regex_condicionales = re.compile("|".join([rf"\b{re.escape(t)}\w*\b" for t in lista_condicionales_limpia]), re.IGNORECASE)
+
+print("Patrones re-alineados con límites bilaterales estrictos.")
+
+
+# Exportación a Excel
+nombre_archivo_excel = "patrones_compilados_adulto_mayor.xlsx"
+
+with pd.ExcelWriter(nombre_archivo_excel, engine="openpyxl") as writer:
+    df_pestana_absolutos.to_excel(writer, sheet_name="Absolutos", index=False)
+    df_pestana_condicionales.to_excel(writer, sheet_name="Condicionales", index=False)
+
+print(f"Diccionario depurado sin duplicados exportado en '{nombre_archivo_excel}'!")
