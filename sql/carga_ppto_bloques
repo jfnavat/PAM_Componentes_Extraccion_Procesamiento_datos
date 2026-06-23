@@ -36,7 +36,7 @@ while True:
     # Siguiente bloque de 100,000
     offset += tamano_bloque
     
-    break
+    #break
 
 print(f"Carga masiva completada. Matriz final con {len(df_final):,} registros.")
 
