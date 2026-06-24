@@ -1,0 +1,57 @@
+/* CREACIÓN DE TABLA */
+CREATE TABLE IF NOT EXISTS `cons_atenciones2025_ppam` (
+  `UBIGEO` varchar(50) NOT NULL,
+  `DEPARTAMENTO` varchar(255) NULL,
+  `PROVINCIA` varchar(255) NULL,
+  `DISTRITO` varchar(255) NULL,
+  `TOTAL_ATENCIONES_PAM` int DEFAULT 0,
+  `TOTAL_ATENCIONES_NO_PAM` int DEFAULT 0,
+  `PORCENTAJE_PAM` numeric(10,2) DEFAULT 0,
+  `TOTAL_GENERAL` int DEFAULT 0, 
+  PRIMARY KEY (`UBIGEO`) USING BTREE
+) ENGINE = MyISAM CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+
+/* INSERCIÓN DE REGISTROS */
+INSERT INTO `cons_atenciones2025_ppam` (
+  `UBIGEO`, `TOTAL_ATENCIONES_PAM`, 
+  `TOTAL_ATENCIONES_NO_PAM`, `PORCENTAJE_PAM`,
+  `TOTAL_GENERAL`
+)
+SELECT 
+  resultado.UBIGEO_STR,
+  resultado.TOTAL_PAM, resultado.TOTAL_NO_PAM,
+  IF(resultado.TOTAL_GENERAL > 0, ROUND ((resultado.TOTAL_PAM / resultado.TOTAL_GENERAL) * 100, 2), 0.00) AS PORCENTAJE_PAM,
+  resultado.TOTAL_GENERAL
+FROM (
+  SELECT 
+    unificado.UBIGEO_STR,
+    SUM (CASE WHEN unificado.CONDICION = 'PAM' THEN unificado.TOTAL_ATENCIONES ELSE 0 END) AS TOTAL_PAM,
+    SUM (CASE WHEN unificado.CONDICION = 'NO PAM' THEN unificado.TOTAL_ATENCIONES ELSE 0 END) AS TOTAL_NO_PAM,
+    SUM (unificado.TOTAL_ATENCIONES) AS TOTAL_GENERAL
+  FROM (
+    -- Tabla: ate_emergencias2025pamp
+    SELECT 
+      LPAD(CAST(`UBIGEO` AS CHAR), 6, '0') AS UBIGEO_STR,
+      CASE 
+        WHEN TRIM(`GRUPO_ETARIO`) = '60 O MÁS AÑOS' THEN 'PAM' 
+        ELSE 'NO PAM' 
+      END AS CONDICION,
+      `TOTAL_ATENCIONES`
+    FROM `ate_emergencias2025pamp`
+    
+    UNION ALL
+    
+    -- Tabla: sis2025_pamp
+    SELECT 
+      LPAD(TRIM(`UBIGEO`), 6, '0') AS UBIGEO_STR, -- <--- Se corrigió la coma faltante aquí
+      CASE 
+        WHEN TRIM(`CATEGORIA_EDAD`) = '60 - MAS AÑOS' THEN 'PAM' 
+        ELSE 'NO PAM' 
+      END AS CONDICION,
+      `TOTAL_ATENCIONES`
+    FROM `sis2025_pamp`
+  ) AS unificado
+  GROUP BY unificado.UBIGEO_STR
+) AS resultado;
+
