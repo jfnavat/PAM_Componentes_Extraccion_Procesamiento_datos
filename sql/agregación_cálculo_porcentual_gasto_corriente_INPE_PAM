@@ -1,0 +1,47 @@
+SELECT 
+    `UBIGEO`, `DEPARTAMENTO`, `PROVINCIA`,`DISTRITO`,
+    -- Suma de todas las edades excepto 60_MAS
+    SUM(
+        COALESCE(`NUM_GRUP_0_11 - TOTAL`, 0) + 
+        COALESCE(`NUM_GRUP_ 12_17 - TOTAL`, 0) + 
+        COALESCE(CAST(`NUM_GRUP_18_25_TOTAL` AS SIGNED), 0) + 
+        COALESCE(`NUM_GRUP_18_29_TOTAL`, 0) + 
+        COALESCE(CAST(`NUM_GRUP_26_59_TOTAL` AS SIGNED), 0) + 
+        COALESCE(`NUM_GRUP_30_59_TOTAL`, 0)
+    ) AS `OTRAS_EDADES`,
+    -- Suma del grupo de 60 años a más por separado
+    SUM(COALESCE(`NUM_GRUP_60_MAS_TOTAL`, 0)) AS `NUM_GRUP_60_MAS_TOTAL`,
+    -- Cálculo de porcentajes
+    ROUND(
+        (SUM(
+            COALESCE(`NUM_GRUP_0_11 - TOTAL`, 0) + 
+            COALESCE(`NUM_GRUP_ 12_17 - TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_18_25_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_18_29_TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_26_59_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_30_59_TOTAL`, 0)
+        ) * 100.0) / 
+        NULLIF(SUM(
+            COALESCE(`NUM_GRUP_0_11 - TOTAL`, 0) + 
+            COALESCE(`NUM_GRUP_ 12_17 - TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_18_25_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_18_29_TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_26_59_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_30_59_TOTAL`, 0) +
+            COALESCE(`NUM_GRUP_60_MAS_TOTAL`, 0)
+        ), 0), 2
+    ) AS `PORCENTAJE_OTRAS_EDADES`,
+    ROUND(
+        (SUM(COALESCE(`NUM_GRUP_60_MAS_TOTAL`, 0)) * 100.0) / 
+        NULLIF(SUM(
+            COALESCE(`NUM_GRUP_0_11 - TOTAL`, 0) + 
+            COALESCE(`NUM_GRUP_ 12_17 - TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_18_25_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_18_29_TOTAL`, 0) + 
+            COALESCE(CAST(`NUM_GRUP_26_59_TOTAL` AS SIGNED), 0) + 
+            COALESCE(`NUM_GRUP_30_59_TOTAL`, 0) +
+            COALESCE(`NUM_GRUP_60_MAS_TOTAL`, 0)
+        ), 0), 2
+    ) AS `PORCENTAJE_60_MAS`
+FROM `conadis2025`
+GROUP BY `UBIGEO`;
