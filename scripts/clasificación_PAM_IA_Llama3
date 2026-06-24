@@ -1,0 +1,86 @@
+# =====================================================================
+# FUNCIÓN DE CLASIFICACIÓN CON IA LOCAL (OLLAMA + LLAMA 3.2)
+# =====================================================================
+def clasificar_lote_local(lista_contextos, lista_indices_reales):
+    bloque_datos = ""
+    for idx, texto in zip(lista_indices_reales, lista_contextos):
+        bloque_datos += f"ID: {idx} | R: {texto}\n"
+        
+    prompt = f"""
+    Analiza estos registros presupuestales de Perú. Determina si corresponden a gastos para Adultos Mayores.
+    Lista a evaluar:
+    {bloque_datos}
+
+    Reglas obligatorias de asignación para cada ID numérico:
+    - SI PAM: Si prioriza directamente a Adultos Mayores (Por ejemplo: vejez, ancianos, pensiones de jubilación, geriatría).
+    - POSIBLE PAM: Contexto de empleo, oportunidades, salud o vulnerabilidad amplia (CANCER, VACUNACIÓN, RAMPAS, ALBERGUES).
+    - NO PAM: Sin relación alguna (sanidad animal, agropecuaria, educación infantil, informática, etc.).
+
+    Responde ÚNICAMENTE con un objeto JSON plano. Las llaves deben ser el ID numérico provisto y los valores deben ser estrictamente 'SI PAM', 'POSIBLE PAM' o 'NO PAM'.
+    No agregar introducciones ni bloques de código markdown como ```json. Solo el JSON puro.
+    Ejemplo de salida esperada:
+    {{"10": "SI PAM", "11": "NO PAM"}}
+    """
+    try:
+        response = ollama.chat(
+            model='llama3.2',
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0.0}
+        )
+        
+        texto_limpio = response['message']['content'].strip()
+        diccionario_salida = json.loads(texto_limpio)
+        
+        if "clasificaciones" in diccionario_salida: return diccionario_salida["clasificaciones"]
+        if "resultados" in diccionario_salida: return diccionario_salida["resultados"]
+            
+        return diccionario_salida
+    except Exception as e:
+        return {}
+
+
+# =====================================================================
+# BUCLE DE EJECUCIÓN POR LOTES (SÓLO PARA REGISTROS CONDICIONALES)
+# =====================================================================
+tamano_lote = 500  
+diccionario_maestro_resultados = {}
+
+if total_candidatos > 0:
+    print(f"\n4. Iniciando clasificación cognitiva con Llama 3.2 en bloques de {tamano_lote}...")
+    
+    for i in range(0, total_candidatos, tamano_lote):
+        sub_df = df_candidatos.iloc[i : i + tamano_lote]
+        indices_reales = sub_df.index.tolist()
+        contextos = sub_df['contexto_completo'].tolist()
+        
+        print(f"  -> Procesando filas {i} a {i + len(sub_df)} de {total_candidatos}...")
+        
+        respuestas_lote = clasificar_lote_local(contextos, indices_reales)
+        
+        for k, v in respuestas_lote.items():
+            try:
+                diccionario_maestro_resultados[int(float(k))] = str(v).strip().upper()
+            except ValueError:
+                continue
+
+    print("\nMapeando clasificaciones cognitivas al DataFrame original...")
+    serie_clasificaciones = pd.Series(diccionario_maestro_resultados)
+    
+    for idx, valor in serie_clasificaciones.items():
+        if idx in df_final.index and df_final.loc[idx, 'CLASIFICA'] != "SI PAM":
+            df_final.loc[idx, 'CLASIFICA'] = valor
+
+
+# =====================================================================
+# FILTRADO Y EXPORTACIÓN DEL REPORTE FINAL CONSOLIDADO
+# =====================================================================
+print("\n5. Generando reporte maestro consolidado...")
+
+df_pam_final = df_final[df_final['CLASIFICA'].isin(["SI PAM", "POSIBLE PAM"])].copy()
+df_pam_final['CLASIFICA'] = pd.Categorical(df_pam_final['CLASIFICA'], categories=["SI PAM", "POSIBLE PAM"], ordered=True)
+df_pam_final = df_pam_final.sort_values('CLASIFICA')
+
+if 'contexto_completo' in df_pam_final.columns:
+    df_pam_final = df_pam_final.drop(columns=['contexto_completo'])
+
+df_pam_final = df_pam_final.applymap(lambda x: ILLEGAL_CHARACTERS_RE.sub(r'', x) if isinstance(x, str) else x)
