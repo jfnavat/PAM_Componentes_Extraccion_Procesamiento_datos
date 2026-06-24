@@ -1,0 +1,61 @@
+import os
+import re
+import json
+import time
+import pandas as pd
+import ollama
+
+# =====================================================================
+# Variables pre-definidas
+# =====================================================================
+# patrones_absolutos_dinamicos
+# lista_condicionales_limpia
+
+columnas_busqueda = [
+    'PROGRAMA_PPTO_NOMBRE', 'PRODUCTO_PROYECTO_NOMBRE', 'ACTIVIDAD_ACCION_OBRA_NOMBRE',
+    'FUNCION_NOMBRE', 'DIVISION_FUNCIONAL_NOMBRE', 'GRUPO_FUNCIONAL_NOMBRE', 'META_NOMBRE','CATEGORIA_GASTO_NOMBRE', 'SUBGENERICA_DET_NOMBRE'
+]
+print("Unificación de todos los campos cualitativos en df_final (Excluyendo ID de la búsqueda)...")
+
+# Contexto usando solo las columnas de texto analizable
+df_final['contexto_completo'] = df_final[columnas_busqueda].astype(str).fillna('').agg(' | '.join, axis=1)
+df_final['contexto_completo'] = df_final['contexto_completo'].str.replace(r'\s+', ' ', regex=True).str.strip()
+
+# Inicialización de todos los registros en "NO PAM" en el DF original
+df_final['CLASIFICA'] = "NO PAM"
+
+# =====================================================================
+# COMPILACIÓN DE EXPRESIONES REGULARES
+# =====================================================================
+print("Compilando expresiones regulares de absolutos y condicionales...")
+regex_absolutos = re.compile("|".join(patrones_absolutos_dinamicos), re.IGNORECASE)
+regex_condicionales = re.compile("|".join([rf"\b{re.escape(t)}\w*\b" for t in lista_condicionales_limpia]), re.IGNORECASE)
+
+# Expresión para limpiar caracteres
+ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+
+# =====================================================================
+# SEGMENTACIÓN Y EXPORTACIÓN DEL CONJUNTO 1 DE ABSOLUTOS
+# =====================================================================
+print("Dividiendo registros según patrones absolutos...")
+mascara_absolutos = df_final['contexto_completo'].str.contains(regex_absolutos, na=False)
+
+# Primero asignamos "SI PAM" en el DataFrame original
+df_final.loc[mascara_absolutos, 'CLASIFICA'] = "SI PAM" 
+df_absolutos = df_final[mascara_absolutos].copy()
+
+# =====================================================================
+# SEGMENTACIÓN Y EXPORTACIÓN DEL CONJUNTO 2 DE CONDICIONALES (PASO PREVIO A IA)
+# =====================================================================
+print("Buscando patrones condicionales dentro del bloque restante...")
+df_no_absolutos = df_final[~mascara_absolutos].copy()
+
+mascara_condicionales = df_no_absolutos['contexto_completo'].str.contains(regex_condicionales, na=False)
+df_condicionales = df_no_absolutos[mascara_condicionales].copy()
+
+# =====================================================================
+# PREPARACIÓN DE CANDIDATOS PARA EL MODELO DE IA LOCAL LLAMA3
+# =====================================================================
+df_candidatos = df_condicionales
+total_candidatos = len(df_candidatos)
+print(f"-> Total registros condicionales listos para Llama 3.2: {total_candidatos}")
